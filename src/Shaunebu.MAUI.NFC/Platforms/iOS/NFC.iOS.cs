@@ -2,6 +2,7 @@
 using CoreNFC;
 using Foundation;
 using Shaunebu.MAUI.NFC.Configuration;
+using Shaunebu.MAUI.NFC.Diagnostics;
 using Shaunebu.MAUI.NFC.Utils;
 using System.Text;
 using UIKit;
@@ -11,7 +12,7 @@ namespace Shaunebu.MAUI.NFC;
 /// <summary>
 /// iOS 13+ implementation of <see cref="INFC"/>
 /// </summary>
-internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
+internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC, INfcCapabilityProvider
 {
     public const string SessionTimeoutMessage = "session timeout";
 
@@ -34,6 +35,7 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     private bool _isWriting;
     private bool _isFormatting;
     private bool _customInvalidation = false;
+    private bool _sessionActive;
 
     private INFCTag? _tag;
 
@@ -55,6 +57,7 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     public bool IsWritingTagSupported => true;
 
     private NfcOptions _options = new();
+    private Microsoft.Extensions.Logging.ILogger? Logger => NfcDiagnostics.CreateLogger(_options);
 
     /// <summary>
     /// <inheritdoc/>
@@ -98,17 +101,32 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     /// </summary>
     public void StartListening()
     {
+        if (_sessionActive)
+            return;
+
         _customInvalidation = false;
         _isWriting = false;
         _isFormatting = false;
+        _sessionActive = true;
 
         NfcSession = new NFCTagReaderSession(NFCPollingOption.Iso14443 | NFCPollingOption.Iso15693, this, NSOperationQueue.CurrentQueue.UnderlyingQueue)
         {
             AlertMessage = Configuration.Messages.NFCDialogAlertMessage
         };
 
-        NfcSession.BeginSession();
-        OnTagListeningStatusChanged?.Invoke(true);
+        try
+        {
+            NfcSession.BeginSession();
+            NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.ListeningStarted, "iOS", "listening started");
+            Raise(OnTagListeningStatusChanged, nameof(OnTagListeningStatusChanged), handler => handler(true));
+        }
+        catch
+        {
+            _sessionActive = false;
+            NfcSession = null;
+            NfcDiagnostics.LogFailure(Logger, NfcLogEventIds.NdefReadFailed, "iOS", "start listening", "BeginSession");
+            throw;
+        }
     }
 
     /// <summary>
@@ -122,20 +140,35 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     /// <param name="clearMessage">Format tag</param>
     public void StartPublishing(bool clearMessage = false)
     {
+        if (_sessionActive)
+            return;
+
         if (!IsAvailable)
             throw new InvalidOperationException(Configuration.Messages.NFCWritingNotSupported);
 
         _customInvalidation = false;
         _isWriting = true;
         _isFormatting = clearMessage;
+        _sessionActive = true;
 
         NfcSession = new NFCTagReaderSession(NFCPollingOption.Iso14443 | NFCPollingOption.Iso15693, this, NSOperationQueue.CurrentQueue.UnderlyingQueue)
         {
             AlertMessage = Configuration.Messages.NFCDialogAlertMessage
         };
 
-        NfcSession.BeginSession();
-        OnTagListeningStatusChanged?.Invoke(true);
+        try
+        {
+            NfcSession.BeginSession();
+            NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.ListeningStarted, "iOS", "publishing started");
+            Raise(OnTagListeningStatusChanged, nameof(OnTagListeningStatusChanged), handler => handler(true));
+        }
+        catch
+        {
+            _sessionActive = false;
+            NfcSession = null;
+            NfcDiagnostics.LogFailure(Logger, NfcLogEventIds.NdefWriteFailed, "iOS", "start publishing", "BeginSession");
+            throw;
+        }
     }
 
     /// <summary>
@@ -162,6 +195,15 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     public void ClearMessage(ITagInfo tagInfo) => WriteOrClearMessage(_tag, tagInfo, true);
 
     /// <summary>
+    /// Raises the OnMessageReceived event (for external use)
+    /// </summary>
+    /// <param name="tagInfo">Tag information</param>
+    public void RaiseMessageReceived(ITagInfo tagInfo)
+    {
+        Raise(OnMessageReceived, nameof(OnMessageReceived), handler => handler(tagInfo));
+    }
+
+    /// <summary>
     /// Event raised when NFC tags are detected
     /// </summary>
     /// <param name="session">iOS <see cref="NFCTagReaderSession"/></param>
@@ -169,7 +211,17 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     public override void DidDetectTags(NFCTagReaderSession session, INFCTag[] tags)
     {
         _customInvalidation = false;
-        _tag = tags.First();
+        var selectionStatus = NfcOperationGuards.SelectSingleTag(tags, out var selectedTag);
+        if (selectionStatus != NfcTagSelectionStatus.SingleTag || selectedTag is null)
+        {
+            if (selectionStatus == NfcTagSelectionStatus.MultipleTags)
+                NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Warning, NfcLogEventIds.MultipleTagsDetected, "iOS", "multiple tags detected");
+
+            RetrySingleTagDetection(session, selectionStatus);
+            return;
+        }
+
+        _tag = selectedTag;
 
         var connectionError = string.Empty;
         session.ConnectTo(_tag, (error) =>
@@ -207,7 +259,7 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
                     return;
                 }
 
-                var nTag = new TagInfo(identifier, isNdefSupported)
+                var nTag = new TagInfo(identifier, isNdefSupported, technologies: GetTechnologies(selectedTag), platformTechnologies: GetPlatformTechnologies(selectedTag))
                 {
                     IsWritable = status == NFCNdefStatus.ReadWrite,
                     Capacity = Convert.ToInt32(capacity)
@@ -217,7 +269,8 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
                 {
                     session.AlertMessage = Configuration.Messages.NFCErrorNotSupportedTag;
 
-                    OnMessageReceived?.Invoke(nTag);
+                    NfcDiagnostics.LogTagDiscovered(Logger, "iOS", nTag);
+                    Raise(OnMessageReceived, nameof(OnMessageReceived), handler => handler(nTag));
                     Invalidate(session);
                     return;
                 }
@@ -225,7 +278,8 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
                 if (_isWriting)
                 {
                     // Write mode
-                    OnTagDiscovered?.Invoke(nTag, _isFormatting);
+                    NfcDiagnostics.LogTagDiscovered(Logger, "iOS", nTag);
+                    Raise(OnTagDiscovered, nameof(OnTagDiscovered), handler => handler(nTag, _isFormatting));
                 }
                 else
                 {
@@ -237,6 +291,7 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
                         // see https://developer.apple.com/documentation/corenfc/nfcreadererror/code/ndefreadersessionerrorzerolengthmessage
                         if (error is not null && error.Code != 403)
                         {
+                            NfcDiagnostics.LogFailure(Logger, NfcLogEventIds.NdefReadFailed, "iOS", "read", error.GetType().FullName);
                             Invalidate(session, Configuration.Messages.NFCErrorRead);
                             return;
                         }
@@ -244,7 +299,8 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
                         session.AlertMessage = Configuration.Messages.NFCSuccessRead;
 
                         nTag.Records = NFCNdefPayloadExtensions.GetRecords(message?.Records);
-                        OnMessageReceived?.Invoke(nTag);
+                        NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.NdefReadSucceeded, "iOS", "NDEF read succeeded");
+                        Raise(OnMessageReceived, nameof(OnMessageReceived), handler => handler(nTag));
                         Invalidate(session);
                     });
                 }
@@ -259,21 +315,28 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     /// <param name="error">iOS <see cref="NSError"/></param>
     public override void DidInvalidate(NFCTagReaderSession session, NSError error)
     {
-        OnTagListeningStatusChanged?.Invoke(false);
+        _sessionActive = false;
+        _tag = null;
+        NfcSession = null;
+        _isWriting = false;
+        _isFormatting = false;
+
+        NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.SessionInvalidated, "iOS", "session invalidated");
+        Raise(OnTagListeningStatusChanged, nameof(OnTagListeningStatusChanged), handler => handler(false));
 
         var readerError = (NFCReaderError)(long)error.Code;
         if (readerError != NFCReaderError.ReaderSessionInvalidationErrorFirstNDEFTagRead && readerError != NFCReaderError.ReaderSessionInvalidationErrorUserCanceled)
         {
             var alertController = UIAlertController.Create(Configuration.Messages.NFCSessionInvalidated, error.LocalizedDescription.ToLower().Equals(SessionTimeoutMessage) ? Configuration.Messages.NFCSessionTimeout : error.LocalizedDescription, UIAlertControllerStyle.Alert);
             alertController.AddAction(UIAlertAction.Create(Configuration.Messages.NFCSessionInvalidatedButton, UIAlertActionStyle.Default, null));
-            OniOSReadingSessionCancelled?.Invoke(null, EventArgs.Empty);
+            Raise(OniOSReadingSessionCancelled, nameof(OniOSReadingSessionCancelled), handler => handler(null, EventArgs.Empty));
             DispatchQueue.MainQueue.DispatchAsync(() =>
             {
                 GetCurrentController().PresentViewController(alertController, true, null);
             });
         }
         else if (readerError == NFCReaderError.ReaderSessionInvalidationErrorUserCanceled && !_customInvalidation)
-            OniOSReadingSessionCancelled?.Invoke(null, EventArgs.Empty);
+            Raise(OniOSReadingSessionCancelled, nameof(OniOSReadingSessionCancelled), handler => handler(null, EventArgs.Empty));
     }
 
     /// <summary>
@@ -319,26 +382,21 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
                         return;
                     }
 
-                    ExecuteWriteOrClear(NfcSession, ndefTag, tagInfo, clearMessage);
+                    ExecuteWriteOrClear(NfcSession, tag, ndefTag, tagInfo, clearMessage, makeReadOnly);
                 });
             }
             else
             {
-                ExecuteWriteOrClear(NfcSession, ndefTag, tagInfo, clearMessage);
-            }
-
-            if (!clearMessage && makeReadOnly)
-            {
-                MakeTagReadOnly(NfcSession, tag, ndefTag);
+                ExecuteWriteOrClear(NfcSession, tag, ndefTag, tagInfo, clearMessage, makeReadOnly);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.StackTrace);
+            Invalidate(NfcSession, ex.Message);
         }
         finally
         {
-            OnTagDisconnected?.Invoke(null, EventArgs.Empty);
+            Raise(OnTagDisconnected, nameof(OnTagDisconnected), handler => handler(null, EventArgs.Empty));
         }
     }
 
@@ -375,6 +433,15 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
             session.InvalidateSession(message);
     }
 
+    private void RetrySingleTagDetection(NFCTagReaderSession session, NfcTagSelectionStatus selectionStatus)
+    {
+        _tag = null;
+        if (selectionStatus == NfcTagSelectionStatus.MultipleTags)
+            session.AlertMessage = NfcOperationGuards.MultipleTagsDetectedMessage;
+
+        session.RestartPolling();
+    }
+
     /// <summary>
     /// Writes or clears a TAG
     /// </summary>
@@ -382,24 +449,19 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     /// <param name="tag"><see cref="INFCNdefTag"/></param>
     /// <param name="tagInfo"><see cref="ITagInfo"/></param>
     /// <param name="clearMessage">Clear message</param>
-    private void ExecuteWriteOrClear(NFCTagReaderSession session, INFCNdefTag tag, ITagInfo tagInfo, bool clearMessage = false) 
+    private void ExecuteWriteOrClear(NFCTagReaderSession session, INFCTag sessionTag, INFCNdefTag tag, ITagInfo tagInfo, bool clearMessage = false, bool makeReadOnly = false)
         => tag.QueryNdefStatus((status, capacity, error) =>
         {
             if (error is not null)
             {
-                Invalidate(session, error.LocalizedDescription);
+                    NfcDiagnostics.LogFailure(Logger, NfcLogEventIds.NdefWriteFailed, "iOS", "write", error.GetType().FullName);
+                    Invalidate(session, error.LocalizedDescription);
                 return;
             }
 
             if (status == NFCNdefStatus.ReadOnly)
             {
                 Invalidate(session, Configuration.Messages.NFCErrorReadOnlyTag);
-                return;
-            }
-
-            if (Convert.ToInt32(capacity) < NFCUtils.GetSize(tagInfo.Records))
-            {
-                Invalidate(session, Configuration.Messages.NFCErrorCapacityTag);
                 return;
             }
 
@@ -427,6 +489,12 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
 
             if (message is not null)
             {
+                if (Convert.ToInt32(capacity) < message.ToByteArray().Length)
+                {
+                    Invalidate(session, Configuration.Messages.NFCErrorCapacityTag);
+                    return;
+                }
+
                 tag.WriteNdef(message, (error) =>
                 {
                     if (error is not null)
@@ -435,14 +503,26 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
                         return;
                     }
 
-                    tagInfo.Records = NFCNdefPayloadExtensions.GetRecords(message.Records);
-                    OnMessagePublished?.Invoke(tagInfo);
-                    Invalidate(NfcSession!);
+                    if (!clearMessage && makeReadOnly)
+                    {
+                        MakeTagReadOnly(session, sessionTag, tag, () => CompleteWrite(session, tagInfo, message));
+                        return;
+                    }
+
+                    CompleteWrite(session, tagInfo, message);
                 });
             }
             else
                 Invalidate(session, Configuration.Messages.NFCErrorWrite);
         });
+
+    private void CompleteWrite(NFCTagReaderSession session, ITagInfo tagInfo, NFCNdefMessage message)
+    {
+        tagInfo.Records = NFCNdefPayloadExtensions.GetRecords(message.Records);
+        NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.NdefWriteSucceeded, "iOS", "NDEF write succeeded");
+        Raise(OnMessagePublished, nameof(OnMessagePublished), handler => handler(tagInfo));
+        Invalidate(session);
+    }
 
     /// <summary>
     /// Make a tag read-only
@@ -451,23 +531,74 @@ internal sealed class NFCImplementation_iOS : NFCTagReaderSessionDelegate, INFC
     /// <param name="session"><see cref="NFCTagReaderSession"/></param>
     /// <param name="tag"><see cref="ITagInfo"/></param>
     /// <param name="ndefTag"><see cref="INFCNdefTag"/></param>
-    private static void MakeTagReadOnly(NFCTagReaderSession session, INFCTag tag, INFCNdefTag ndefTag) 
+    private void MakeTagReadOnly(NFCTagReaderSession session, INFCTag tag, INFCNdefTag ndefTag, Action onSuccess)
         => session.ConnectTo(tag, (error) =>
         {
             if (error is not null)
             {
-                Console.WriteLine(error.LocalizedDescription);
+                NfcDiagnostics.LogFailure(Logger, NfcLogEventIds.ReadOnlyLockFailed, "iOS", "read-only lock", error.GetType().FullName);
+                Invalidate(session, NfcOperationGuards.CombineWriteLockFailure(error.LocalizedDescription));
                 return;
             }
 
             ndefTag.WriteLock((error) =>
             {
                 if (error is not null)
-                    Console.WriteLine("Error when locking a tag on iOS: " + error.LocalizedDescription);
+                {
+                    NfcDiagnostics.LogFailure(Logger, NfcLogEventIds.ReadOnlyLockFailed, "iOS", "read-only lock", error.GetType().FullName);
+                    Invalidate(session, NfcOperationGuards.CombineWriteLockFailure(error.LocalizedDescription));
+                }
                 else
-                    Console.WriteLine("Locking Successful!");
+                {
+                    NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.ReadOnlyLockSucceeded, "iOS", "read-only lock succeeded");
+                    onSuccess();
+                }
             });
         });
+
+    public NfcCapabilities GetCapabilities()
+    {
+        var capabilities = IsAvailable
+            ? new NfcCapabilities
+            {
+                Availability = NfcAvailabilityStatus.Available,
+                CanRead = true,
+                CanWrite = IsWritingTagSupported,
+                CanMakeReadOnly = IsWritingTagSupported
+            }
+            : new NfcCapabilities
+            {
+                Availability = NfcAvailabilityStatus.Unknown,
+                PlatformReason = "Core NFC reports reading unavailable; device support, entitlement, signing, simulator state, and temporary platform state cannot be separated by this API."
+            };
+
+        NfcDiagnostics.LogCapabilities(Logger, "iOS", capabilities);
+        return capabilities;
+    }
+
+    private void Raise<TDelegate>(TDelegate? handlers, string eventName, Action<TDelegate> invokeSubscriber)
+        where TDelegate : Delegate
+        => NfcEventDispatcher.Invoke(handlers, eventName, _options, Logger, invokeSubscriber);
+
+    private static IReadOnlyList<NfcTagTechnology> GetTechnologies(INFCTag tag)
+        => tag.Type switch
+        {
+            NFCTagType.MiFare => [NfcTagTechnology.Mifare],
+            NFCTagType.Iso7816Compatible => [NfcTagTechnology.Iso7816],
+            NFCTagType.Iso15693 => [NfcTagTechnology.Iso15693],
+            NFCTagType.FeliCa => [NfcTagTechnology.FeliCa],
+            _ => []
+        };
+
+    private static IReadOnlyList<string> GetPlatformTechnologies(INFCTag tag)
+        => tag.Type switch
+        {
+            NFCTagType.MiFare => ["MiFare"],
+            NFCTagType.Iso7816Compatible => ["Iso7816Compatible"],
+            NFCTagType.Iso15693 => ["Iso15693"],
+            NFCTagType.FeliCa => ["FeliCa"],
+            _ => []
+        };
 }
 
 /// <summary>
@@ -523,7 +654,7 @@ internal static class NFCNdefMessageExtensions
             // cf (chunked records) not supported yet
 
             // SR (Short Record)?
-            if (payload is null || payload.Length < 255)
+            if (payload is null || payload.Length <= byte.MaxValue)
                 flags |= 0x10;
 
             // ID present?
@@ -611,11 +742,11 @@ internal static class NFCNdefPayloadExtensions
         switch (payload.TypeNameFormat)
         {
             case NFCTypeNameFormat.NFCWellKnown:
-                if (payload.Type.ToString() == "T")
-                    return "text/plain";
+                if (payload.Type.ToUtf8String() == "T")
+                    return NdefRecordEncoding.TextMimeType;
                 break;
             case NFCTypeNameFormat.Media:
-                return payload.Type.ToString();
+                return payload.Type.ToUtf8String();
         }
         return null;
     }
@@ -630,7 +761,7 @@ internal static class NFCNdefPayloadExtensions
         switch (payload.TypeNameFormat)
         {
             case NFCTypeNameFormat.NFCWellKnown:
-                if (payload.Type.ToString() == "U")
+                if (payload.Type.ToUtf8String() == "U")
                 {
                     var uri = payload.Payload?.ParseWktUri();
                     return uri;
@@ -638,13 +769,23 @@ internal static class NFCNdefPayloadExtensions
                 break;
             case NFCTypeNameFormat.AbsoluteUri:
             case NFCTypeNameFormat.Media:
-                var content = Encoding.UTF8.GetString(payload.Payload.ToByteArray());
-                if (Uri.TryCreate(content, UriKind.RelativeOrAbsolute, out var result))
+                if (NdefRecordEncoding.TryDecodeUtf8(payload.Payload?.ToByteArray(), out var content) &&
+                    Uri.TryCreate(content, UriKind.RelativeOrAbsolute, out var result))
+                {
                     return result;
+                }
 
                 break;
         }
         return null;
+    }
+
+    private static string ToUtf8String(this NSData? data)
+    {
+        if (!NdefRecordEncoding.TryDecodeUtf8(data?.ToByteArray(), out var value))
+            return string.Empty;
+
+        return value;
     }
 
     /// <summary>
@@ -653,83 +794,12 @@ internal static class NFCNdefPayloadExtensions
     /// <returns><see cref="Uri"/></returns>
     private static Uri? ParseWktUri(this NSData data)
     {
-        var payload = data.ToByteArray();
-
-        if (payload.Length < 2)
-            return null;
-
-        var prefixIndex = payload[0] & 0xFF;
-        if (prefixIndex < 0 || prefixIndex >= _uri_Prefixes_Map.Length)
-            return null;
-
-        var prefix = _uri_Prefixes_Map[prefixIndex];
-        var suffix = Encoding.UTF8.GetString(CopyOfRange(payload, 1, payload.Length));
-
-        if (Uri.TryCreate(prefix + suffix, UriKind.Absolute, out var result))
+        if (NdefRecordEncoding.TryParseUriPayload(data.ToByteArray(), out var uri) &&
+            Uri.TryCreate(uri, UriKind.RelativeOrAbsolute, out var result))
             return result;
 
         return null;
     }
-
-    /// <summary>
-    /// Copy a range of an array into another array
-    /// </summary>
-    /// <param name="src">Array of <see cref="byte"/></param>
-    /// <param name="start">Start</param>
-    /// <param name="end">End</param>
-    /// <returns>Array of <see cref="byte"/></returns>
-    private static byte[] CopyOfRange(byte[] src, int start, int end)
-    {
-        var length = end - start;
-        var dest = new byte[length];
-        for (var i = 0; i < length; i++)
-            dest[i] = src[start + i];
-        return dest;
-    }
-
-    /// <summary>
-    /// NFC Forum "URI Record Type Definition"
-    /// This is a mapping of "URI Identifier Codes" to URI string prefixes,
-    /// per section 3.2.2 of the NFC Forum URI Record Type Definition document.
-    /// </summary>
-    private static readonly string[] _uri_Prefixes_Map = [
-        "", // 0x00
-        "http://www.", // 0x01
-        "https://www.", // 0x02
-        "http://", // 0x03
-        "https://", // 0x04
-        "tel:", // 0x05
-        "mailto:", // 0x06
-        "ftp://anonymous:anonymous@", // 0x07
-        "ftp://ftp.", // 0x08
-        "ftps://", // 0x09
-        "sftp://", // 0x0A
-        "smb://", // 0x0B
-        "nfs://", // 0x0C
-        "ftp://", // 0x0D
-        "dav://", // 0x0E
-        "news:", // 0x0F
-        "telnet://", // 0x10
-        "imap:", // 0x11
-        "rtsp://", // 0x12
-        "urn:", // 0x13
-        "pop:", // 0x14
-        "sip:", // 0x15
-        "sips:", // 0x16
-        "tftp:", // 0x17
-        "btspp://", // 0x18
-        "btl2cap://", // 0x19
-        "btgoep://", // 0x1A
-        "tcpobex://", // 0x1B
-        "irdaobex://", // 0x1C
-        "file://", // 0x1D
-        "urn:epc:id:", // 0x1E
-        "urn:epc:tag:", // 0x1F
-        "urn:epc:pat:", // 0x20
-        "urn:epc:raw:", // 0x21
-        "urn:epc:", // 0x22
-        "urn:nfc:", // 0x23
-    ];
 
     /// <summary>
     /// Returns an empty iOS <see cref="NFCNdefPayload"/>
@@ -751,13 +821,31 @@ internal static class NFCNdefPayloadExtensions
         for (var i = 0; i < records.Length; i++)
         {
             var record = records[i];
+            var type = record.Type.ToUtf8String();
             var ndefRecord = new NFCNdefRecord
             {
                 TypeFormat = (NFCNdefTypeFormat)record.TypeNameFormat,
                 Uri = records[i].ToUri()?.ToString(),
                 MimeType = records[i].ToMimeType() ?? string.Empty,
-                Payload = record.Payload?.ToByteArray()
+                Payload = record.Payload?.ToByteArray(),
+                Type = record.Type?.ToByteArray(),
+                Identifier = record.Identifier?.ToByteArray()
             };
+
+            if (record.TypeNameFormat == NFCTypeNameFormat.NFCWellKnown &&
+                type == "T" &&
+                NdefRecordEncoding.TryParseTextPayload(ndefRecord.Payload, out _, out var languageCode))
+            {
+                ndefRecord.LanguageCode = languageCode;
+            }
+
+            if (record.TypeNameFormat == NFCTypeNameFormat.NFCExternal &&
+                NdefRecordEncoding.TrySplitExternalType(type, out var externalDomain, out var externalType))
+            {
+                ndefRecord.ExternalDomain = externalDomain;
+                ndefRecord.ExternalType = externalType;
+            }
+
             results.SetValue(ndefRecord, i);
         }
         return results;
@@ -779,18 +867,19 @@ internal static class NFCNdefPayloadExtensions
             case NFCNdefTypeFormat.WellKnown:
                 var lang = record.LanguageCode;
                 if (string.IsNullOrWhiteSpace(lang)) lang = configuration.DefaultLanguageCode;
-                var langData = Encoding.ASCII.GetBytes(lang.Substring(0, 2));
-                var payloadData = new byte[] { 0x02 }.Concat(langData).Concat(record.Payload).ToArray();
-                payload = new NFCNdefPayload(NFCTypeNameFormat.NFCWellKnown, NSData.FromString("T"), new NSData(), NSData.FromString(Encoding.UTF8.GetString(payloadData), NSStringEncoding.UTF8));
+                if (NdefRecordEncoding.TryCreateTextPayload(record.Payload, lang, out var payloadData))
+                    payload = new NFCNdefPayload(NFCTypeNameFormat.NFCWellKnown, NSData.FromArray([(byte)'T']), new NSData(), NSData.FromArray(payloadData));
                 break;
             case NFCNdefTypeFormat.Mime:
                 payload = new NFCNdefPayload(NFCTypeNameFormat.Media, record.MimeType, new NSData(), NSData.FromArray(record.Payload));
                 break;
             case NFCNdefTypeFormat.Uri:
-                payload = NFCNdefPayload.CreateWellKnownTypePayload(NSUrl.FromString(Encoding.UTF8.GetString(record.Payload))!);
+                if (NdefRecordEncoding.TryDecodeUtf8(record.Payload, out var uri))
+                    payload = NFCNdefPayload.CreateWellKnownTypePayload(NSUrl.FromString(uri)!);
                 break;
             case NFCNdefTypeFormat.External:
-                payload = new NFCNdefPayload(NFCTypeNameFormat.NFCExternal, record.ExternalType!, new NSData(), NSData.FromString(Encoding.UTF8.GetString(record.Payload), NSStringEncoding.UTF8));
+                if (NdefRecordEncoding.TryComposeExternalType(record.ExternalDomain, record.ExternalType, out var externalType))
+                    payload = new NFCNdefPayload(NFCTypeNameFormat.NFCExternal, externalType, new NSData(), NSData.FromArray(record.Payload));
                 break;
             case NFCNdefTypeFormat.Empty:
                 payload = EmptyPayload;

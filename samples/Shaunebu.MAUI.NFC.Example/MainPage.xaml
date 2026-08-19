@@ -1,118 +1,258 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage x:Class="Shaunebu.MAUI.NFC.Maui.Sample.MainPage"
              xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Name="thisPage"
-             BindingContext="{x:Reference thisPage}">
+             xmlns:local="clr-namespace:Shaunebu.MAUI.NFC.Maui.Sample"
+             xmlns:models="clr-namespace:Shaunebu.MAUI.NFC.Maui.Sample.Models"
+             x:DataType="local:MainPage"
+             Title="Shaunebu.MAUI.NFC Sample">
 
     <ContentPage.Resources>
         <ResourceDictionary>
-
-            <Style TargetType="Label">
-                <Setter Property="HorizontalOptions" Value="Center" />
-                <Setter Property="HorizontalTextAlignment" Value="Center" />
-            </Style>
-
-            <Style TargetType="Grid">
-                <Setter Property="RowSpacing" Value="16" />
-                <Setter Property="ColumnSpacing" Value="8" />
-            </Style>
-
-            <Style TargetType="Border">
-                <Setter Property="StrokeShape" Value="RoundRectangle 10" />
-                <Setter Property="Stroke" Value="Gray" />
-                <Setter Property="StrokeThickness" Value="1" />
-                <Setter Property="Padding" Value="16" />
-            </Style>
-
-            <Style x:Key="LabelMessage" TargetType="Label">
-                <Setter Property="Padding" Value="12,6" />
+            <Style x:Key="SectionTitle" TargetType="Label">
                 <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="FontSize" Value="20" />
+                <Setter Property="TextColor" Value="#141414" />
+            </Style>
+
+            <Style x:Key="Caption" TargetType="Label">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="TextColor" Value="#6E6E6E" />
+            </Style>
+
+            <Style x:Key="Panel" TargetType="Border">
+                <Setter Property="BackgroundColor" Value="#FFFFFF" />
+                <Setter Property="Padding" Value="16" />
+                <Setter Property="Stroke" Value="#DADADA" />
+                <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+                <Setter Property="StrokeThickness" Value="1" />
+            </Style>
+
+            <Style x:Key="DangerButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="#B42318" />
                 <Setter Property="TextColor" Value="White" />
             </Style>
-
         </ResourceDictionary>
     </ContentPage.Resources>
 
     <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
 
-        <Grid Margin="30"
-              ColumnDefinitions="*"
-              RowDefinitions="auto,auto,auto,auto,auto"
-              VerticalOptions="Center">
-
-            <VerticalStackLayout Grid.Row="0" Spacing="8">
-
-                <Label BackgroundColor="Blue"
-                       IsVisible="{Binding DeviceIsListening}"
-                       Style="{StaticResource LabelMessage}"
-                       Text="Listening for NFC Tag..." />
-
-                <Label BackgroundColor="Red"
-                       IsVisible="{Binding NfcIsDisabled}"
-                       Style="{StaticResource LabelMessage}"
-                       Text="NFC IS DISABLED" />
-
+            <VerticalStackLayout Spacing="4">
+                <Label FontAttributes="Bold"
+                       FontSize="28"
+                       Text="Shaunebu.MAUI.NFC" />
+                <Label Style="{StaticResource Caption}"
+                       Text="Canonical sample for reading, writing, clearing, and validating NDEF tags with the current public API." />
             </VerticalStackLayout>
 
-            <Button Grid.Row="1"
-                    Clicked="Button_Clicked_StartListening"
-                    IsEnabled="{Binding NfcIsEnabled}"
-                    Text="Read Tag" />
+            <Border Style="{StaticResource Panel}">
+                <Grid ColumnDefinitions="*,*"
+                      RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                      RowSpacing="10">
+                    <Label Grid.ColumnSpan="2"
+                           Style="{StaticResource SectionTitle}"
+                           Text="NFC Status" />
 
-            <Button Grid.Row="2"
-                    Clicked="Button_Clicked_StopListening"
-                    IsEnabled="{Binding NfcIsEnabled}"
-                    Text="Stop Listener" />
+                    <Label Grid.Row="1" Text="Platform" />
+                    <Label Grid.Row="1"
+                           Grid.Column="1"
+                           FontAttributes="Bold"
+                           Text="{Binding PlatformName}" />
 
-            <Border Grid.Row="3">
+                    <Label Grid.Row="2" Text="Supported / available" />
+                    <Label Grid.Row="2"
+                           Grid.Column="1"
+                           Text="{Binding AvailabilitySummary}" />
 
-                <Grid RowDefinitions="*,*,*,*">
+                    <Label Grid.Row="3" Text="Enabled / writing" />
+                    <Label Grid.Row="3"
+                           Grid.Column="1"
+                           Text="{Binding CapabilitySummary}" />
 
-                    <Grid Grid.Row="0"
-                          ColumnDefinitions="auto,*"
-                          HorizontalOptions="Center">
-
-                        <CheckBox x:Name="ChkReadOnly"
-                                  Grid.Column="0"
-                                  IsChecked="False"
-                                  IsEnabled="{Binding NfcIsEnabled}"
-                                  VerticalOptions="Center"
-                                  Color="Red" />
-
-                        <Label Grid.Column="1"
-                               FontAttributes="Bold"
-                               Text="Make Tag Read-Only"
-                               TextColor="Red"
-                               VerticalOptions="Center" />
-                    </Grid>
-
-                    <Button Grid.Row="1"
-                            Clicked="Button_Clicked_StartWriting"
-                            IsEnabled="{Binding NfcIsEnabled}"
-                            Text="Write Tag (Text)" />
-
-                    <Button Grid.Row="2"
-                            Clicked="Button_Clicked_StartWriting_Uri"
-                            IsEnabled="{Binding NfcIsEnabled}"
-                            Text="Write Tag (Uri)" />
-
-                    <Button Grid.Row="3"
-                            Clicked="Button_Clicked_StartWriting_Custom"
-                            IsEnabled="{Binding NfcIsEnabled}"
-                            Text="Write Tag (Custom)" />
-
+                    <Label Grid.Row="4" Text="Current operation" />
+                    <Label Grid.Row="4"
+                           Grid.Column="1"
+                           FontAttributes="Bold"
+                           Text="{Binding OperationStatus}" />
                 </Grid>
             </Border>
 
-            <Button Grid.Row="4"
-                    BackgroundColor="Red"
-                    Clicked="Button_Clicked_FormatTag"
-                    IsEnabled="{Binding NfcIsEnabled}"
-                    Text="Clear Tag" />
+            <Grid ColumnDefinitions="*,*"
+                  ColumnSpacing="12">
+                <Button Clicked="OnRefreshStatusClicked"
+                        Text="Refresh status" />
+                <Button Grid.Column="1"
+                        Clicked="OnStopClicked"
+                        IsEnabled="{Binding CanStopSession}"
+                        Text="Stop session" />
+            </Grid>
 
-        </Grid>
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Style="{StaticResource SectionTitle}" Text="Read" />
+                    <Label Style="{StaticResource Caption}"
+                           Text="Start a foreground scan/session, present one NDEF tag, and inspect the tag metadata and records below." />
+                    <Button Clicked="OnStartListeningClicked"
+                            IsEnabled="{Binding CanStartListening}"
+                            Text="Start listening" />
+                </VerticalStackLayout>
+            </Border>
 
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Style="{StaticResource SectionTitle}" Text="Write" />
+                    <Label Style="{StaticResource Caption}"
+                           Text="Choose a record type, fill the relevant fields, then scan a writable tag." />
+
+                    <Picker SelectedIndex="0"
+                            SelectedIndexChanged="OnRecordKindChanged"
+                            Title="NDEF record type">
+                        <Picker.Items>
+                            <x:String>Text</x:String>
+                            <x:String>URI</x:String>
+                            <x:String>MIME</x:String>
+                            <x:String>External</x:String>
+                        </Picker.Items>
+                    </Picker>
+
+                    <VerticalStackLayout IsVisible="{Binding IsTextFormVisible}" Spacing="8">
+                        <Entry Placeholder="Language code"
+                               Text="{Binding TextLanguageCode}" />
+                        <Editor AutoSize="TextChanges"
+                                HeightRequest="90"
+                                Placeholder="Text payload"
+                                Text="{Binding TextPayload}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout IsVisible="{Binding IsUriFormVisible}" Spacing="8">
+                        <Entry Keyboard="Url"
+                               Placeholder="https://example.com"
+                               Text="{Binding UriPayload}" />
+                        <Label Style="{StaticResource Caption}"
+                               Text="Read URI records are never opened automatically." />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout IsVisible="{Binding IsMimeFormVisible}" Spacing="8">
+                        <Entry Placeholder="text/plain"
+                               Text="{Binding MimeType}" />
+                        <Editor AutoSize="TextChanges"
+                                HeightRequest="90"
+                                Placeholder="MIME payload text"
+                                Text="{Binding MimePayload}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout IsVisible="{Binding IsExternalFormVisible}" Spacing="8">
+                        <Entry Placeholder="External domain, for example example.com"
+                               Text="{Binding ExternalDomain}" />
+                        <Entry Placeholder="External type, for example asset"
+                               Text="{Binding ExternalType}" />
+                        <Editor AutoSize="TextChanges"
+                                HeightRequest="90"
+                                Placeholder="External payload text"
+                                Text="{Binding ExternalPayload}" />
+                    </VerticalStackLayout>
+
+                    <Grid ColumnDefinitions="Auto,*"
+                          ColumnSpacing="8">
+                        <CheckBox IsChecked="{Binding MakeReadOnly}"
+                                  IsEnabled="{Binding CanStartPublishing}" />
+                        <Label Grid.Column="1"
+                               Text="Make tag read-only after writing"
+                               TextColor="#B42318"
+                               VerticalOptions="Center" />
+                    </Grid>
+
+                    <Button Clicked="OnStartPublishingClicked"
+                            IsEnabled="{Binding CanStartPublishing}"
+                            Text="Write selected record" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Style="{StaticResource SectionTitle}" Text="Clear" />
+                    <Label Style="{StaticResource Caption}"
+                           Text="Write an empty NDEF message or format an NDEF-formatable tag where the platform supports it." />
+                    <Button Clicked="OnClearTagClicked"
+                            IsEnabled="{Binding CanStartPublishing}"
+                            Style="{StaticResource DangerButton}"
+                            Text="Clear tag" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Style="{StaticResource SectionTitle}" Text="Last Tag" />
+                    <Label Text="{Binding LastTagSummary}" />
+                    <Button Clicked="OnOpenUriClicked"
+                            IsEnabled="{Binding CanOpenLastUri}"
+                            Text="Open URI" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Style="{StaticResource SectionTitle}" Text="NDEF Records" />
+                    <CollectionView ItemsSource="{Binding Records}">
+                        <CollectionView.EmptyView>
+                            <Label Style="{StaticResource Caption}" Text="Scan or write a tag to see NDEF records." />
+                        </CollectionView.EmptyView>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:NdefRecordDisplay">
+                                <Border Margin="0,0,0,8"
+                                        Padding="12"
+                                        Stroke="#E1E1E1"
+                                        StrokeShape="RoundRectangle 8"
+                                        StrokeThickness="1">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label FontAttributes="Bold"
+                                               Text="{Binding Index, StringFormat='Record {0}'}" />
+                                        <Label Text="{Binding TypeFormat, StringFormat='Type: {0}'}" />
+                                        <Label IsVisible="{Binding HasMessage}"
+                                               Text="{Binding Message, StringFormat='Message: {0}'}" />
+                                        <Label IsVisible="{Binding HasUri}"
+                                               Text="{Binding Uri, StringFormat='URI: {0}'}" />
+                                        <Label IsVisible="{Binding HasMimeType}"
+                                               Text="{Binding MimeType, StringFormat='MIME: {0}'}" />
+                                        <Label IsVisible="{Binding HasExternalType}"
+                                               Text="{Binding ExternalType, StringFormat='External: {0}'}" />
+                                        <Label Text="{Binding PayloadSummary}" />
+                                        <Label IsVisible="{Binding HasTypeSummary}"
+                                               Style="{StaticResource Caption}"
+                                               Text="{Binding TypeSummary}" />
+                                        <Label IsVisible="{Binding HasIdentifierSummary}"
+                                               Style="{StaticResource Caption}"
+                                               Text="{Binding IdentifierSummary}" />
+                                        <Label IsVisible="{Binding HasHexPreview}"
+                                               Style="{StaticResource Caption}"
+                                               Text="{Binding HexPreview}" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource Panel}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Style="{StaticResource SectionTitle}" Text="Activity" />
+                    <CollectionView HeightRequest="220"
+                                    ItemsSource="{Binding EventLog}">
+                        <CollectionView.EmptyView>
+                            <Label Style="{StaticResource Caption}" Text="Sample events appear here." />
+                        </CollectionView.EmptyView>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:SampleEventLogEntry">
+                                <Label FontSize="13"
+                                       Text="{Binding Summary}" />
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
     </ScrollView>
-
 </ContentPage>

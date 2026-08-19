@@ -4,6 +4,7 @@ using Android.Content;
 using Android.Nfc;
 using Android.Nfc.Tech;
 using Shaunebu.MAUI.NFC.Configuration;
+using Shaunebu.MAUI.NFC.Diagnostics;
 using Shaunebu.MAUI.NFC.Utils;
 using System.Text;
 
@@ -12,8 +13,14 @@ namespace Shaunebu.MAUI.NFC;
 /// <summary>
 /// Android implementation of <see cref="INFC"/>
 /// </summary>
-internal sealed class NFCImplementation_Android : INFC
+internal sealed class NFCImplementation_Android : INFC, INfcCapabilityProvider
 {
+    private enum AndroidNdefReadMode
+    {
+        Cached,
+        Fresh
+    }
+
     /// <summary>
     /// Default constructor
     /// </summary>
@@ -110,6 +117,7 @@ internal sealed class NFCImplementation_Android : INFC
     public bool IsWritingTagSupported => NFCUtils.IsWritingSupported();
 
     private NfcOptions _options = new();
+    private Microsoft.Extensions.Logging.ILogger? Logger => NfcDiagnostics.CreateLogger(_options);
 
     /// <summary>
     /// <inheritdoc/>
@@ -191,7 +199,8 @@ internal sealed class NFCImplementation_Android : INFC
         _nfcAdapter.EnableForegroundDispatch(CurrentActivity, pendingIntent, filters, null);
 
         _isListening = true;
-        OnTagListeningStatusChanged?.Invoke(_isListening);
+        NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.ListeningStarted, "Android", "listening started");
+        Raise(OnTagListeningStatusChanged, nameof(OnTagListeningStatusChanged), handler => handler(_isListening));
     }
 
     /// <summary>
@@ -203,7 +212,8 @@ internal sealed class NFCImplementation_Android : INFC
         _nfcAdapter?.DisableForegroundDispatch(CurrentActivity);
 
         _isListening = false;
-        OnTagListeningStatusChanged?.Invoke(_isListening);
+        NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.ListeningStopped, "Android", "listening stopped");
+        Raise(OnTagListeningStatusChanged, nameof(OnTagListeningStatusChanged), handler => handler(_isListening));
     }
 
     /// <summary>
@@ -263,19 +273,31 @@ internal sealed class NFCImplementation_Android : INFC
             {
                 _currentTag = tag;
 
-                var nTag = GetTagInfo(_currentTag);
-                if (nTag is not null)
+                try
                 {
-                    if (_isWriting)
+                    var readMode = _isWriting ? AndroidNdefReadMode.Cached : AndroidNdefReadMode.Fresh;
+                    var nTag = GetTagInfo(_currentTag, readMode: readMode);
+                    if (nTag is not null)
                     {
-                        // Write mode
-                        OnTagDiscovered?.Invoke(nTag, _isFormatting);
+                        if (_isWriting)
+                        {
+                            // Write mode
+                            NfcDiagnostics.LogTagDiscovered(Logger, "Android", nTag);
+                            Raise(OnTagDiscovered, nameof(OnTagDiscovered), handler => handler(nTag, _isFormatting));
+                        }
+                        else
+                        {
+                            // Read mode
+                            NfcDiagnostics.LogTagDiscovered(Logger, "Android", nTag);
+                            NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.NdefReadSucceeded, "Android", "NDEF read succeeded");
+                            Raise(OnMessageReceived, nameof(OnMessageReceived), handler => handler(nTag));
+                        }
                     }
-                    else
-                    {
-                        // Read mode
-                        OnMessageReceived?.Invoke(nTag);
-                    }
+                }
+                finally
+                {
+                    if (!_isWriting)
+                        _currentTag = null;
                 }
             }
         }
@@ -321,136 +343,109 @@ internal sealed class NFCImplementation_Android : INFC
                 var ndefFormatable = NdefFormatable.Get(_currentTag)
                     ?? throw new Exception(Configuration.Messages.NFCErrorFormatTag);
 
+                Exception? formatFailure = null;
                 try
                 {
                     ndefFormatable.Connect();
-                    OnTagConnected?.Invoke(null, EventArgs.Empty);
+                    Raise(OnTagConnected, nameof(OnTagConnected), handler => handler(null, EventArgs.Empty));
                     isTagConnected = true;
 
                     ndefFormatable.Format(GetEmptyNdefMessage());
                 }
-                catch (Android.Nfc.TagLostException tlex)
-                {
-                    throw new Exception("Tag Lost Error: " + tlex.Message);
-                }
-                catch (Java.IO.IOException ioex)
-                {
-                    throw new Exception("Tag IO Error: " + ioex.Message);
-                }
-                catch (Android.Nfc.FormatException fe)
-                {
-                    throw new Exception("Tag Format Error: " + fe.Message);
-                }
                 catch (Exception ex)
                 {
-                    throw new Exception("Tag Error: " + ex.Message);
+                    formatFailure = CreateAndroidNfcException(ex);
                 }
                 finally
                 {
-                    if (ndefFormatable.IsConnected)
-                        ndefFormatable.Close();
+                    CloseNdefFormatable(ndefFormatable, ref formatFailure);
                 }
+
+                if (formatFailure is not null)
+                    throw formatFailure;
 
                 ndef = Ndef.Get(_currentTag);
 
                 if (ndef is null)
                 {
                     _currentTag = null;
-                    OnTagDisconnected?.Invoke(null, EventArgs.Empty);
+                    Raise(OnTagDisconnected, nameof(OnTagDisconnected), handler => handler(null, EventArgs.Empty));
 
                     throw new Exception("Tag has been successfully formated but an error occured when trying open it again");
                 }
             }
 
+            Exception? writeFailure = null;
             try
             {
                 if (!ndef.IsWritable)
                     throw new Exception(Configuration.Messages.NFCErrorReadOnlyTag);
 
-                if (ndef.MaxSize < NFCUtils.GetSize(tagInfo.Records))
-                    throw new Exception(Configuration.Messages.NFCErrorCapacityTag);
-
-                ndef.Connect();
-
-                if (!isTagConnected)
-                    OnTagConnected?.Invoke(null, EventArgs.Empty);
-
-                NdefMessage? message = null;
-                if (clearMessage)
-                {
-                    message = GetEmptyNdefMessage();
-                }
-                else
-                {
-                    var records = new List<NdefRecord>();
-
-                    foreach (var record in tagInfo.Records)
-                    {
-                        if (GetAndroidNdefRecord(record) is NdefRecord ndefRecord)
-                            records.Add(ndefRecord);
-                    }
-
-                    if (records.Count > 0)
-                        message = new NdefMessage(records.ToArray());
-                }
+                var message = clearMessage ? GetEmptyNdefMessage() : GetAndroidNdefMessage(tagInfo.Records);
 
                 if (message is not null)
                 {
+                    var encodedMessage = message.ToByteArray();
+                    if (encodedMessage is null || ndef.MaxSize < encodedMessage.Length)
+                        throw new Exception(Configuration.Messages.NFCErrorCapacityTag);
+
+                    ndef.Connect();
+
+                    if (!isTagConnected)
+                        Raise(OnTagConnected, nameof(OnTagConnected), handler => handler(null, EventArgs.Empty));
+
                     ndef.WriteNdefMessage(message);
 
                     if (!clearMessage && makeReadOnly)
                     {
                         if (!MakeReadOnly(ndef))
-                            Console.WriteLine("Cannot lock tag");
+                        {
+                            NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Warning, NfcLogEventIds.ReadOnlyLockFailed, "Android", "read-only lock failed");
+                            throw new Exception(NfcOperationGuards.WriteLockFailedMessage);
+                        }
+
+                        NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.ReadOnlyLockSucceeded, "Android", "read-only lock succeeded");
                     }
 
                     var nTag = GetTagInfo(_currentTag, ndef.NdefMessage)
                         ?? throw new Exception("Missing TagInfo");
 
-                    OnMessagePublished?.Invoke(nTag);
+                    NfcDiagnostics.LogEvent(Logger, Microsoft.Extensions.Logging.LogLevel.Information, NfcLogEventIds.NdefWriteSucceeded, "Android", "NDEF write succeeded");
+                    Raise(OnMessagePublished, nameof(OnMessagePublished), handler => handler(nTag));
                 }
                 else
                     throw new Exception(Configuration.Messages.NFCErrorWrite);
             }
-            catch (Android.Nfc.TagLostException tlex)
-            {
-                throw new Exception("Tag Lost Error: " + tlex.Message);
-            }
-            catch (Java.IO.IOException ioex)
-            {
-                throw new Exception("Tag IO Error: " + ioex.Message);
-            }
-            catch (Android.Nfc.FormatException fe)
-            {
-                throw new Exception("Tag Format Error: " + fe.Message);
-            }
             catch (Exception ex)
             {
-                throw new Exception("Tag Error: " + ex.Message);
+                writeFailure = CreateAndroidNfcException(ex);
             }
             finally
             {
-                if (ndef.IsConnected)
-                    ndef.Close();
+                CloseNdef(ndef, ref writeFailure);
 
                 _currentTag = null;
-                OnTagDisconnected?.Invoke(null, EventArgs.Empty);
+                Raise(OnTagDisconnected, nameof(OnTagDisconnected), handler => handler(null, EventArgs.Empty));
             }
+
+            if (writeFailure is not null)
+                throw writeFailure;
         }
         catch (Exception ex)
         {
-            StopPublishingAndThrowError(ex.Message);
+            StopPublishingAndThrowError(ex);
         }
     }
 
     /// <summary>
     /// Stops publishing and throws error
     /// </summary>
-    /// <param name="message">message</param>
-    private void StopPublishingAndThrowError(string message)
+    /// <param name="exception">Exception to throw</param>
+    private void StopPublishingAndThrowError(Exception exception)
     {
+        NfcDiagnostics.LogFailure(Logger, NfcLogEventIds.NdefWriteFailed, "Android", "write", exception);
         StopPublishing();
-        throw new Exception(message);
+        throw exception;
     }
 
     /// <summary>
@@ -477,7 +472,9 @@ internal sealed class NFCImplementation_Android : INFC
                 TypeFormat = (NFCNdefTypeFormat)records[i].Tnf,
                 Uri = records[i].ToUri()?.ToString(),
                 MimeType = records[i].ToMimeType() ?? string.Empty,
-                Payload = records[i].GetPayload()
+                Payload = records[i].GetPayload(),
+                Type = records[i].GetTypeInfo(),
+                Identifier = records[i].GetId()
             };
             results.SetValue(ndefRecord, i);
         }
@@ -490,7 +487,7 @@ internal sealed class NFCImplementation_Android : INFC
     /// <param name="tag">Android <see cref="Tag"/></param>
     /// <param name="ndefMessage">Android <see cref="NdefMessage"/></param>
     /// <returns><see cref="ITagInfo"/></returns>
-    private static TagInfo? GetTagInfo(Tag tag, NdefMessage? ndefMessage = null)
+    private static TagInfo? GetTagInfo(Tag tag, NdefMessage? ndefMessage = null, AndroidNdefReadMode readMode = AndroidNdefReadMode.Cached)
     {
         if (tag is null || tag.GetId() is null)
             return null;
@@ -506,14 +503,22 @@ internal sealed class NFCImplementation_Android : INFC
 
         var isNdefCompatible = ndef is not null || isNdefFormatable;
 
-        var nTag = new TagInfo(tag.GetId()!, isNdefCompatible, isNdefFormatable);
+        var platformTechnologies = tag.GetTechList() ?? [];
+        var technologies = platformTechnologies
+            .Select(NfcTagTechnologyMapper.FromAndroidTechName)
+            .Where(technology => technology != NfcTagTechnology.Unknown)
+            .ToArray();
+
+        var nTag = new TagInfo(tag.GetId()!, isNdefCompatible, isNdefFormatable, technologies, platformTechnologies);
 
         if (ndef is not null)
         {
             nTag.Capacity = ndef.MaxSize;
             nTag.IsWritable = ndef.IsWritable;
 
-            ndefMessage ??= ndef.CachedNdefMessage;
+            ndefMessage ??= readMode == AndroidNdefReadMode.Fresh
+                ? ReadFreshNdefMessage(ndef)
+                : ndef.CachedNdefMessage;
 
             if (ndefMessage is not null)
             {
@@ -526,6 +531,54 @@ internal sealed class NFCImplementation_Android : INFC
         }
 
         return nTag;
+    }
+
+    /// <summary>
+    /// Reads the current message from a connected Android <see cref="Ndef"/>.
+    /// </summary>
+    /// <param name="ndef">Android NDEF technology</param>
+    /// <returns>Current NDEF message</returns>
+    private static NdefMessage? ReadFreshNdefMessage(Ndef ndef)
+    {
+        Exception? readFailure = null;
+        NdefMessage? message = null;
+
+        try
+        {
+            ndef.Connect();
+            message = ndef.NdefMessage;
+        }
+        catch (Exception ex)
+        {
+            readFailure = CreateAndroidNfcException(ex);
+        }
+        finally
+        {
+            CloseNdef(ndef, ref readFailure);
+        }
+
+        if (readFailure is not null)
+            throw readFailure;
+
+        return message;
+    }
+
+    /// <summary>
+    /// Transforms records into an Android <see cref="NdefMessage"/>
+    /// </summary>
+    /// <param name="records">Records to write</param>
+    /// <returns>Android <see cref="NdefMessage"/></returns>
+    private NdefMessage? GetAndroidNdefMessage(NFCNdefRecord[] records)
+    {
+        var ndefRecords = new List<NdefRecord>();
+
+        foreach (var record in records)
+        {
+            if (GetAndroidNdefRecord(record) is NdefRecord ndefRecord)
+                ndefRecords.Add(ndefRecord);
+        }
+
+        return ndefRecords.Count > 0 ? new NdefMessage(ndefRecords.ToArray()) : null;
     }
 
     /// <summary>
@@ -544,16 +597,22 @@ internal sealed class NFCImplementation_Android : INFC
             case NFCNdefTypeFormat.WellKnown:
                 var languageCode = record.LanguageCode;
                 if (string.IsNullOrWhiteSpace(languageCode)) languageCode = Configuration.DefaultLanguageCode;
-                ndefRecord = NdefRecord.CreateTextRecord(languageCode.Substring(0, 2), Encoding.UTF8.GetString(record.Payload));
+                if (NdefRecordEncoding.TryNormalizeLanguageCode(languageCode, out var normalizedLanguageCode) &&
+                    NdefRecordEncoding.TryDecodeUtf8(record.Payload, out var text))
+                {
+                    ndefRecord = NdefRecord.CreateTextRecord(normalizedLanguageCode, text);
+                }
                 break;
             case NFCNdefTypeFormat.Mime:
                 ndefRecord = NdefRecord.CreateMime(record.MimeType, record.Payload);
                 break;
             case NFCNdefTypeFormat.Uri:
-                ndefRecord = NdefRecord.CreateUri(Encoding.UTF8.GetString(record.Payload));
+                if (NdefRecordEncoding.TryDecodeUtf8(record.Payload, out var uri))
+                    ndefRecord = NdefRecord.CreateUri(uri);
                 break;
             case NFCNdefTypeFormat.External:
-                ndefRecord = NdefRecord.CreateExternal(record.ExternalDomain, record.ExternalType, record.Payload);
+                if (NdefRecordEncoding.TryComposeExternalType(record.ExternalDomain, record.ExternalType, out _))
+                    ndefRecord = NdefRecord.CreateExternal(record.ExternalDomain, record.ExternalType, record.Payload);
                 break;
             case NFCNdefTypeFormat.Empty:
                 ndefRecord = GetEmptyNdefRecord();
@@ -600,23 +659,71 @@ internal sealed class NFCImplementation_Android : INFC
         if (ndef is null)
             return false;
 
+        Exception? readOnlyFailure = null;
         var result = false;
         var newConnection = false;
 
-        if (!ndef.IsConnected)
+        try
         {
-            newConnection = true;
-            ndef.Connect();
+            if (!ndef.IsConnected)
+            {
+                newConnection = true;
+                ndef.Connect();
+            }
+
+            if (ndef.CanMakeReadOnly())
+                result = ndef.MakeReadOnly();
+        }
+        catch (Exception ex)
+        {
+            readOnlyFailure = CreateAndroidNfcException(ex);
+        }
+        finally
+        {
+            if (newConnection)
+                CloseNdef(ndef, ref readOnlyFailure);
         }
 
-        if (ndef.CanMakeReadOnly())
-            result = ndef.MakeReadOnly();
-
-        if (newConnection && ndef.IsConnected)
-            ndef.Close();
+        if (readOnlyFailure is not null)
+            throw readOnlyFailure;
 
         return result;
     }
+
+    private static void CloseNdef(Ndef? ndef, ref Exception? primaryException)
+    {
+        try
+        {
+            if (ndef?.IsConnected == true)
+                ndef.Close();
+        }
+        catch (Exception ex)
+        {
+            primaryException = NfcOperationGuards.PreservePrimaryException(primaryException, CreateAndroidNfcException(ex));
+        }
+    }
+
+    private static void CloseNdefFormatable(NdefFormatable? ndefFormatable, ref Exception? primaryException)
+    {
+        try
+        {
+            if (ndefFormatable?.IsConnected == true)
+                ndefFormatable.Close();
+        }
+        catch (Exception ex)
+        {
+            primaryException = NfcOperationGuards.PreservePrimaryException(primaryException, CreateAndroidNfcException(ex));
+        }
+    }
+
+    private static Exception CreateAndroidNfcException(Exception exception)
+        => exception switch
+        {
+            Android.Nfc.TagLostException => new Exception("Tag Lost Error: " + exception.Message, exception),
+            Java.IO.IOException => new Exception("Tag IO Error: " + exception.Message, exception),
+            Android.Nfc.FormatException => new Exception("Tag Format Error: " + exception.Message, exception),
+            _ => exception
+        };
 
     /// <summary>
     /// Register NFC Broadcast Receiver
@@ -651,7 +758,8 @@ internal sealed class NFCImplementation_Android : INFC
     /// <summary>
     /// Called when NFC status has changed
     /// </summary>
-    private void OnNfcStatusChange() => _onNfcStatusChangedInternal?.Invoke(IsEnabled);
+    private void OnNfcStatusChange()
+        => Raise(_onNfcStatusChangedInternal, nameof(OnNfcStatusChanged), handler => handler(IsEnabled));
 
     /// <summary>
     /// Broadcast Receiver to check NFC feature availability
@@ -688,13 +796,13 @@ internal sealed class NFCImplementation_Android : INFC
     /// <param name="tagInfo">Tag information</param>
     public void RaiseMessageReceived(ITagInfo tagInfo)
     {
-        OnMessageReceived?.Invoke(tagInfo);
+        Raise(OnMessageReceived, nameof(OnMessageReceived), handler => handler(tagInfo));
     }
 
     /// <summary>
     /// Converts an Android Intent to TagInfo
     /// </summary>
-    public ITagInfo GetTagInfo(Intent intent)
+    public ITagInfo? GetTagInfo(Intent? intent)
     {
         if (intent == null)
             return null;
@@ -721,4 +829,40 @@ internal sealed class NFCImplementation_Android : INFC
 
         return null;
     }
+
+    public NfcCapabilities GetCapabilities()
+    {
+        var capabilities = _nfcAdapter is null
+            ? new NfcCapabilities
+            {
+                Availability = NfcAvailabilityStatus.NotSupported,
+                PlatformReason = "Android returned no default NFC adapter."
+            }
+            : CurrentContext.CheckCallingOrSelfPermission(Manifest.Permission.Nfc) != Android.Content.PM.Permission.Granted
+                ? new NfcCapabilities
+                {
+                    Availability = NfcAvailabilityStatus.ConfigurationMissing,
+                    PlatformReason = "The Android NFC permission is not granted."
+                }
+                : !_nfcAdapter.IsEnabled
+                    ? new NfcCapabilities
+                    {
+                        Availability = NfcAvailabilityStatus.Disabled,
+                        PlatformReason = "The Android NFC adapter is disabled."
+                    }
+                    : new NfcCapabilities
+                    {
+                        Availability = NfcAvailabilityStatus.Available,
+                        CanRead = true,
+                        CanWrite = IsWritingTagSupported,
+                        CanMakeReadOnly = IsWritingTagSupported
+                    };
+
+        NfcDiagnostics.LogCapabilities(Logger, "Android", capabilities);
+        return capabilities;
+    }
+
+    private void Raise<TDelegate>(TDelegate? handlers, string eventName, Action<TDelegate> invokeSubscriber)
+        where TDelegate : Delegate
+        => NfcEventDispatcher.Invoke(handlers, eventName, _options, Logger, invokeSubscriber);
 }

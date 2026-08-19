@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.36511.14 d17.14
+# Visual Studio Version 18
+VisualStudioVersion = 18.8.12023.21 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{84179D15-8991-4BC2-8F88-E7A35063612C}"
 	ProjectSection(SolutionItems) = preProject
@@ -15,6 +15,17 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{5608AAA5-5BE5-4537-B414-CEB3E49F1516}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shaunebu.MAUI.NFC", "Shaunebu.MAUI.NFC\Shaunebu.MAUI.NFC.csproj", "{C1CEA798-27A2-4A42-A772-CD12282534EE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{AA91FE6D-3493-422E-B8DE-9D37E3B0A4EF}"
+	ProjectSection(SolutionItems) = preProject
+		..\docs\audit\AUDIT.md = ..\docs\audit\AUDIT.md
+		..\docs\audit\RELEASE_PLAN.md = ..\docs\audit\RELEASE_PLAN.md
+		..\docs\audit\ROADMAP.md = ..\docs\audit\ROADMAP.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shaunebu.MAUI.NFC.Tests", "..\tests\Shaunebu.MAUI.NFC.Tests\Shaunebu.MAUI.NFC.Tests.csproj", "{50B2222A-B27C-499E-A5AE-ED3C662F3939}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -164,12 +175,61 @@ Global
 		{C1CEA798-27A2-4A42-A772-CD12282534EE}.Release|x64.Build.0 = Release|Any CPU
 		{C1CEA798-27A2-4A42-A772-CD12282534EE}.Release|x86.ActiveCfg = Release|Any CPU
 		{C1CEA798-27A2-4A42-A772-CD12282534EE}.Release|x86.Build.0 = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|Any CPU.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|Any CPU.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|ARM.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|ARM.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|iPhone.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|iPhone.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|iPhoneSimulator.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|iPhoneSimulator.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|x64.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|x64.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|x86.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Ad-Hoc|x86.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|Any CPU.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|Any CPU.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|ARM.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|ARM.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|iPhone.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|iPhone.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|iPhoneSimulator.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|iPhoneSimulator.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|x64.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|x64.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|x86.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.AppStore|x86.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|ARM.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|ARM.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|iPhone.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|iPhone.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|iPhoneSimulator.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|iPhoneSimulator.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|x64.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Debug|x86.Build.0 = Debug|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|ARM.ActiveCfg = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|ARM.Build.0 = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|iPhone.ActiveCfg = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|iPhone.Build.0 = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|iPhoneSimulator.ActiveCfg = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|iPhoneSimulator.Build.0 = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|x64.ActiveCfg = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|x64.Build.0 = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|x86.ActiveCfg = Release|Any CPU
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{80A0C611-10C0-43ED-BC1B-6E18F28552B7} = {5608AAA5-5BE5-4537-B414-CEB3E49F1516}
+		{50B2222A-B27C-499E-A5AE-ED3C662F3939} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {42FAD1EC-BD42-4390-995A-9BC7E9A771DD}

@@ -1,5 +1,18 @@
 ## Changelog
 
+### 1.1.0
+- Update the package for .NET 9 and .NET 10 MAUI Android/iOS targets while retaining .NET 9 package assets.
+- Enable package validation with API compatibility checked against 1.0.4.
+- Improve NDEF text parsing, iOS text payload writing, encoded-size capacity checks, and external type handling.
+- Harden current Android/iOS read, write, cleanup, and multiple-tag behavior without changing the public event API.
+- Add backward-compatible capability reporting through `CrossNFC.GetCapabilities()` and `INFC.GetCapabilities()`.
+- Add configurable event dispatch through `NfcOptions.EventDispatchMode`, including optional main-thread dispatch and subscriber exception isolation.
+- Add optional redacted diagnostics through `NfcOptions.LoggerFactory` and stable `NfcLogEventIds`.
+- Add tag technology metadata helpers and preserve raw NDEF type/id metadata when reading records.
+- Expand automated tests and package smoke coverage.
+- Rewrite README documentation and polish NuGet metadata for the production-readiness release.
+- Modernize the existing MAUI sample into the canonical reference app with Text, URI, MIME, External, clear, read-only, multiple-record display, event history, and warning-free builds.
+
 ### 1.0.0
 - Update .NET Maui support
 - Remove Xamarin support

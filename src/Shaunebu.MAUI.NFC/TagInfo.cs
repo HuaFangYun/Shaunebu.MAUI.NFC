@@ -5,7 +5,7 @@ namespace Shaunebu.MAUI.NFC;
 /// <summary>
 /// Default implementation of <see cref="ITagInfo"/>
 /// </summary>
-internal sealed class TagInfo : ITagInfo
+internal sealed class TagInfo : ITagInfo, INfcTagTechnologyInfo
 {
     public byte[] Identifier { get; } = [];
 
@@ -44,6 +44,12 @@ internal sealed class TagInfo : ITagInfo
     /// </summary>
     public bool IsFormatable { get; }
 
+    /// <inheritdoc/>
+    public IReadOnlyList<NfcTagTechnology> Technologies { get; } = [];
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> PlatformTechnologies { get; } = [];
+
     /// <summary>
     /// Default constructor
     /// </summary>
@@ -58,13 +64,20 @@ internal sealed class TagInfo : ITagInfo
     /// <param name="identifier">Tag Identifier</param>
     /// <param name="isNdefCompatible">Is Ndef compatible tag</param>
     /// <param name="isNdefFormatable">Is Ndef formatable tag</param>
-    public TagInfo(byte[] identifier, bool isNdefCompatible = true, bool isNdefFormatable = false)
+    public TagInfo(
+        byte[] identifier,
+        bool isNdefCompatible = true,
+        bool isNdefFormatable = false,
+        IEnumerable<NfcTagTechnology>? technologies = null,
+        IEnumerable<string>? platformTechnologies = null)
     {
         Identifier = identifier;
         SerialNumber = NFCUtils.ByteArrayToHexString(identifier);
         IsSupported = isNdefCompatible;
         IsFormatable = isNdefFormatable;
+        Technologies = technologies?.Distinct().ToArray() ?? [];
+        PlatformTechnologies = platformTechnologies?.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct().ToArray() ?? [];
     }
 
-    public override string ToString() => $"TagInfo: identifier: {Identifier}, SerialNumber:{SerialNumber}, Capacity:{Capacity} bytes, IsSupported:{IsSupported}, IsEmpty:{IsEmpty}, IsWritable:{IsWritable}, IsFormatable:{IsFormatable}";
+    public override string ToString() => $"TagInfo: identifier: {Identifier}, SerialNumber:{SerialNumber}, Capacity:{Capacity} bytes, IsSupported:{IsSupported}, IsEmpty:{IsEmpty}, IsWritable:{IsWritable}, IsFormatable:{IsFormatable}, Technologies:{string.Join(",", Technologies)}";
 }

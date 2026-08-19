@@ -1,11 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net9.0-android;net9.0-ios</TargetFrameworks>
+    <TargetFrameworks>net9.0-android;net9.0-ios;net10.0-android;net10.0-ios</TargetFrameworks>
     <UseMaui>true</UseMaui>
     <SingleProject>true</SingleProject>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
 
     <NoWarn>CA1416,CA1422,CA1859;CS0067</NoWarn>
 
@@ -19,27 +20,32 @@
     <PackageProjectUrl>https://github.com/Shaunebu/Shaunebu.MAUI.NFC</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Shaunebu/Shaunebu.MAUI.NFC</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>dotnet-maui;maui;nfc;ndef;</PackageTags>
+    <PackageTags>dotnet-maui;maui;nfc;ndef;android;ios;core-nfc;mobile;near-field-communication</PackageTags>
     <IncludeSymbols>True</IncludeSymbols>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <Title>NFC Plugin for .NET Maui</Title>
-    <Description>Plugin.NFC provides the ability to easily read on write NFC tags in your application.</Description>
+    <Description>A focused .NET MAUI NFC plugin for reading, writing, clearing, and optionally locking NDEF tags on Android and iOS.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <DebugType>portable</DebugType>
-    <PackageIconUrl>https://github.com/Shaunebu/Shaunebu.MAUI.NFC/raw/master/art/nfc200.png</PackageIconUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Version>1.0.3</Version>
+    <PackageReleaseNotes>1.1.0 focuses on production readiness: .NET 9 and .NET 10 MAUI Android/iOS package validation, API compatibility against 1.0.4, NDEF text/URI/MIME/external correctness fixes, Android/iOS reliability hardening, additive capability reporting, configurable event dispatch, redacted diagnostics, tag technology metadata, raw NDEF type/id metadata on reads, expanded tests, richer README documentation, and polished NuGet metadata.</PackageReleaseNotes>
+    <Version>1.1.0</Version>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>1.0.4</PackageValidationBaselineVersion>
 
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net9.0'))" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.120" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net9.0'))" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.20" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))" />
   </ItemGroup>
   
   <!-- Package additions -->

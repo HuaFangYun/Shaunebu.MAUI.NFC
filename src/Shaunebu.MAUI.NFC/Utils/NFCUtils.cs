@@ -16,18 +16,7 @@ public static class NFCUtils
     /// <param name="records">array of <see cref="NFCNdefRecord"/></param>
     /// <returns>Content size</returns>
     internal static int GetSize(NFCNdefRecord[] records)
-    {
-        var size = 0;
-        if (records is not null && records.Length > 0)
-        {
-            for (var i = 0; i < records.Length; i++)
-            {
-                if (records[i] is not null)
-                    size += records[i].Payload!.Length;
-            }
-        }
-        return size;
-    }
+        => NdefRecordEncoding.GetEncodedMessageSize(records);
 
     /// <summary>
     /// Returns the string formatted payload
@@ -48,19 +37,13 @@ public static class NFCUtils
         {
             if (type == NFCNdefTypeFormat.WellKnown)
             {
-                // NDEF_WELLKNOWN Text record
-                var status = payload[0];
-                var enc = status & 0x80;
-                var languageCodeLength = status & 0x3F;
-                if (enc == 0)
-                    message = Encoding.UTF8.GetString(payload, languageCodeLength + 1, payload.Length - languageCodeLength - 1);
-                else
-                    message = Encoding.Unicode.GetString(payload, languageCodeLength + 1, payload.Length - languageCodeLength - 1);
+                if (NdefRecordEncoding.TryParseTextPayload(payload, out var textMessage, out _))
+                    message = textMessage;
             }
-            else
+            else if (NdefRecordEncoding.TryDecodeUtf8(payload, out var decodedPayload))
             {
                 // Other NDEF types
-                message = Encoding.UTF8.GetString(payload, 0, payload.Length);
+                message = decodedPayload;
             }
         }
 
@@ -83,7 +66,23 @@ public static class NFCUtils
     {
         if (record == null)
             return string.Empty;
-        return GetMessage(record.TypeFormat, record.Payload, record.Uri);
+
+        if (!string.IsNullOrWhiteSpace(record.Uri))
+            return record.Uri;
+
+        if (record.Payload is null)
+            return string.Empty;
+
+        if (NdefRecordEncoding.IsTextRecord(record))
+        {
+            return NdefRecordEncoding.TryParseTextPayload(record.Payload, out var message, out _)
+                ? message
+                : string.Empty;
+        }
+
+        return record.TypeFormat == NFCNdefTypeFormat.WellKnown
+            ? string.Empty
+            : GetMessage(record.TypeFormat, record.Payload, record.Uri);
     }
 
     /// <summary>

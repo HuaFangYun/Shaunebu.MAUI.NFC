@@ -118,12 +118,18 @@ public interface INFC
     /// </summary>
     event TagListeningStatusChangedEventHandler OnTagListeningStatusChanged;
 
+    /// <summary>
+    /// Raises the OnMessageReceived event.
+    /// </summary>
+    /// <param name="tagInfo">Tag information</param>
+    void RaiseMessageReceived(ITagInfo tagInfo);
+
 #if ANDROID
     /// <summary>
     /// Converts an Android Intent to TagInfo
     /// </summary>
     /// <param name="intent">Android NFC intent</param>
     /// <returns>TagInfo or null</returns>
-    ITagInfo GetTagInfo(Intent intent);
+    ITagInfo? GetTagInfo(Intent? intent);
 #endif
 }

@@ -1,4 +1,6 @@
-﻿namespace Shaunebu.MAUI.NFC.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace Shaunebu.MAUI.NFC.Configuration;
 
 public sealed class NfcOptions
 {
@@ -11,4 +13,14 @@ public sealed class NfcOptions
     /// Gets or sets nfc configuration
     /// </summary>
     public NfcConfiguration Configuration { get; set; } = NfcConfiguration.GetDefaultConfiguration();
+
+    /// <summary>
+    /// Gets or sets how public NFC event subscribers are invoked.
+    /// </summary>
+    public NfcEventDispatchMode EventDispatchMode { get; set; } = NfcEventDispatchMode.Native;
+
+    /// <summary>
+    /// Gets or sets an optional logger factory for structured diagnostics.
+    /// </summary>
+    public ILoggerFactory? LoggerFactory { get; set; }
 }

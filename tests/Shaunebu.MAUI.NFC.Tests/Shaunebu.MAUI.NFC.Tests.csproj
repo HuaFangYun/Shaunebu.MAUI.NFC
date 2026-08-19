@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" Condition="'$(TargetFramework)' == 'net9.0'" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" Condition="'$(TargetFramework)' == 'net10.0'" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Configuration\NfcConfiguration.cs" Link="Library\Configuration\NfcConfiguration.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Configuration\NfcEventDispatchMode.cs" Link="Library\Configuration\NfcEventDispatchMode.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Configuration\NfcOptions.cs" Link="Library\Configuration\NfcOptions.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Configuration\UserDefinedMessages.cs" Link="Library\Configuration\UserDefinedMessages.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Diagnostics\NfcLogEventIds.cs" Link="Library\Diagnostics\NfcLogEventIds.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\INFC.cs" Link="Library\INFC.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\ITagInfo.cs" Link="Library\ITagInfo.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\INfcTagTechnologyInfo.cs" Link="Library\INfcTagTechnologyInfo.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\NfcAvailabilityStatus.cs" Link="Library\NfcAvailabilityStatus.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\NfcCapabilities.cs" Link="Library\NfcCapabilities.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\NfcCapabilityExtensions.cs" Link="Library\NfcCapabilityExtensions.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\NfcTagInfoExtensions.cs" Link="Library\NfcTagInfoExtensions.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\NfcTagTechnology.cs" Link="Library\NfcTagTechnology.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\NFCNdefRecord.cs" Link="Library\NFCNdefRecord.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\NFCNdefTypeFormat.cs" Link="Library\NFCNdefTypeFormat.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Utils\NfcDiagnostics.cs" Link="Library\Utils\NfcDiagnostics.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Utils\NdefRecordEncoding.cs" Link="Library\Utils\NdefRecordEncoding.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Utils\NfcOperationGuards.cs" Link="Library\Utils\NfcOperationGuards.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Utils\NfcTagTechnologyMapper.cs" Link="Library\Utils\NfcTagTechnologyMapper.cs" />
+    <Compile Include="..\..\src\Shaunebu.MAUI.NFC\Utils\NFCUtils.cs" Link="Library\Utils\NFCUtils.cs" />
+    <Compile Include="..\..\samples\Shaunebu.MAUI.NFC.Example\Models\NdefRecordDisplay.cs" Link="Sample\Models\NdefRecordDisplay.cs" />
+    <Compile Include="..\..\samples\Shaunebu.MAUI.NFC.Example\Models\SampleEventLogEntry.cs" Link="Sample\Models\SampleEventLogEntry.cs" />
+    <Compile Include="..\..\samples\Shaunebu.MAUI.NFC.Example\Models\WriteRecordKind.cs" Link="Sample\Models\WriteRecordKind.cs" />
+    <Compile Include="..\..\samples\Shaunebu.MAUI.NFC.Example\Services\SampleNdefRecordFactory.cs" Link="Sample\Services\SampleNdefRecordFactory.cs" />
+  </ItemGroup>
+
+</Project>

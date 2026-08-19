@@ -1,6 +1,7 @@
-﻿#if ANDROID
+#if ANDROID
 using Microsoft.Maui.LifecycleEvents;
 #endif
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shaunebu.MAUI.NFC.Configuration;
 
 namespace Shaunebu.MAUI.NFC.Hosting;
@@ -27,8 +28,9 @@ public static class AppHostBuilderExtensions
             {
                 var nfcOptions = new NfcOptions();
                 options?.Invoke(nfcOptions);
-                CrossNFC.Current.Options = nfcOptions;
+                CrossNFC.Configure(nfcOptions);
 
+                builder.Services.RemoveAll<INFC>();
                 builder.Services.AddSingleton(CrossNFC.Current);
             }
         }
