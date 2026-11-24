@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net9.0-android35.0;net9.0-ios18.0;net10.0-android36.0;net10.0-ios26.0</TargetFrameworks>
+		<TargetFrameworks>net10.0-android;net10.0-ios;net11.0-android;net11.0-ios</TargetFrameworks>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>Shaunebu.MAUI.NFC.Maui.Sample</RootNamespace>
 		<UseMaui>true</UseMaui>
@@ -22,15 +22,19 @@
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">14.2</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 		<CodesignKey>iPhone Developer</CodesignKey>
 		<ProvisioningType>automatic</ProvisioningType>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<RunAOTCompilation>false</RunAOTCompilation>
-		<AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
-	</PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0-android'">
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
 
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
 	  <ProvisioningType>manual</ProvisioningType>
@@ -57,10 +61,13 @@
 	</ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.120" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net9.0'))" />
-    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.20" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))" />
-    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="9.0.120" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net9.0'))" />
-    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="10.0.20" Condition="$([System.String]::Copy('$(TargetFramework)').StartsWith('net10.0'))" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.130" Condition="$(TargetFramework.StartsWith('net10.0'))" />
+
+    <PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" Condition="$(TargetFramework.StartsWith('net11.0'))" />
+
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="10.0.130" Condition="$(TargetFramework.StartsWith('net10.0'))" />
+
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="10.0.130" Condition="$(TargetFramework.StartsWith('net11.0'))" />
   </ItemGroup>
 
   <ItemGroup>
